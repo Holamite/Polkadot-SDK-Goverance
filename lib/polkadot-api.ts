@@ -1,9 +1,10 @@
 import { ApiPromise, WsProvider } from "@polkadot/api"
 import { web3Accounts, web3Enable, web3FromAddress } from "@polkadot/extension-dapp"
 import type { InjectedAccountWithMeta } from "@polkadot/extension-inject/types"
+import { config } from "./config"
 
-// Westend testnet endpoint - official Polkadot testnet
-const WS_PROVIDER = "wss://westend-rpc.polkadot.io"
+// Use Paseo testnet endpoint from config
+const WS_PROVIDER = config.polkadotEndpoints.paseo
 
 export class PolkadotAPI {
   private static instance: PolkadotAPI
@@ -76,6 +77,117 @@ export class PolkadotAPI {
 
   getAccounts(): InjectedAccountWithMeta[] {
     return this.accounts
+  }
+
+  async switchToPaseoNetwork(): Promise<void> {
+    try {
+      // Check if we can access the extension's network switching
+      const extensions = await web3Enable("Voting Platform")
+      if (extensions.length === 0) {
+        throw new Error("No Polkadot extension found")
+      }
+
+      console.log("Attempting to switch to Paseo network...")
+      
+      // Check if Talisman extension is available
+      const talismanExtension = extensions.find(ext => ext.name === "talisman")
+      if (!talismanExtension) {
+        throw new Error("Talisman extension not found")
+      }
+
+      // Try different methods to switch network
+      if (talismanExtension.switchNetwork) {
+        await talismanExtension.switchNetwork("paseo")
+        console.log("Switched to Paseo network via switchNetwork")
+      } else if (talismanExtension.switchChain) {
+        await talismanExtension.switchChain("paseo")
+        console.log("Switched to Paseo network via switchChain")
+      } else if (talismanExtension.request) {
+        // Try using the request method
+        await talismanExtension.request({
+          method: "talisman_switchNetwork",
+          params: ["paseo"]
+        })
+        console.log("Switched to Paseo network via request method")
+      } else {
+        // Check if we can access the global Talisman object
+        if (typeof window !== 'undefined' && (window as any).talisman) {
+          const talisman = (window as any).talisman
+          if (talisman.switchNetwork) {
+            await talisman.switchNetwork("paseo")
+            console.log("Switched to Paseo network via global Talisman object")
+          } else {
+            throw new Error("Network switching not supported by this extension")
+          }
+        } else {
+          throw new Error("Network switching not supported by this extension")
+        }
+      }
+    } catch (error) {
+      console.error("Failed to switch to Paseo network:", error)
+      throw new Error("Please manually switch to Paseo network in your Talisman wallet extension")
+    }
+  }
+
+  async forceReconnectToPaseo(): Promise<void> {
+    try {
+      console.log("Force reconnecting to Paseo network...")
+      
+      // Disconnect current connection
+      if (this.api) {
+        await this.api.disconnect()
+        this.api = null
+      }
+      
+      // Force reinitialize with Paseo endpoint
+      const wsProvider = new WsProvider(config.polkadotEndpoints.paseo)
+      this.api = await ApiPromise.create({ provider: wsProvider })
+      console.log("Force reconnected to Paseo network with endpoint:", config.polkadotEndpoints.paseo)
+      
+      // Verify the connection by checking the chain name
+      try {
+        const chain = await this.api.rpc.system.chain()
+        console.log("Connected to chain:", chain.toString())
+      } catch (error) {
+        console.log("Could not get chain name:", error)
+      }
+      
+      // Reconnect wallet to get new accounts
+      await this.connectWallet()
+      
+      console.log("Force reconnected to Paseo network")
+    } catch (error) {
+      console.error("Failed to force reconnect to Paseo:", error)
+      throw error
+    }
+  }
+
+  async getCurrentNetwork(): Promise<string> {
+    try {
+      if (!this.api) {
+        return "unknown"
+      }
+      
+      const chain = await this.api.rpc.system.chain()
+      return chain.toString()
+    } catch (error) {
+      console.error("Failed to get current network:", error)
+      return "unknown"
+    }
+  }
+
+  async checkPaseoNetwork(): Promise<boolean> {
+    try {
+      const network = await this.getCurrentNetwork()
+      return network.toLowerCase().includes("paseo")
+    } catch (error) {
+      console.error("Failed to check Paseo network:", error)
+      return false
+    }
+  }
+
+  getApiEndpoint(): string {
+    return config.polkadotEndpoints.paseo
   }
 
   async getBalance(address: string): Promise<string> {

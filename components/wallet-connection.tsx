@@ -43,9 +43,14 @@ export function WalletConnection() {
     isConnecting,
     isConnected,
     error,
+    currentNetwork,
+    isPaseoNetwork,
     connectWallet,
     selectAccount,
     disconnect,
+    switchToPaseoNetwork,
+    checkNetwork,
+    forceReconnectToPaseo,
   } = usePolkadotWallet()
 
   const [showAccountSelector, setShowAccountSelector] = useState(false)
@@ -192,6 +197,14 @@ export function WalletConnection() {
           <span className="text-xs text-muted-foreground">
             {formatAddress(selectedAccount?.address || "")}
           </span>
+          <div className="flex items-center gap-1 mt-1">
+            <Badge 
+              variant={isPaseoNetwork ? "default" : "destructive"} 
+              className="text-xs px-1 py-0"
+            >
+              {isPaseoNetwork ? "Paseo" : currentNetwork}
+            </Badge>
+          </div>
         </div>
         <ChevronDownIcon className="h-4 w-4" />
       </Menu.Button>
@@ -244,6 +257,60 @@ export function WalletConnection() {
                   <WalletIcon className="h-4 w-4" />
                   Switch Account ({accounts.length})
                 </button>
+              )}
+            </Menu.Item>
+          )}
+
+          {/* Network switching */}
+          {!isPaseoNetwork && (
+            <Menu.Item>
+              {({ active }) => (
+                <button
+                  onClick={switchToPaseoNetwork}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-sm text-blue-600",
+                    active && "bg-blue-50 text-blue-700"
+                  )}
+                >
+                  <div className="h-4 w-4 rounded-full bg-blue-500"></div>
+                  Switch to Paseo Network
+                </button>
+              )}
+            </Menu.Item>
+          )}
+
+          {/* Force reconnect to Paseo */}
+          {!isPaseoNetwork && (
+            <Menu.Item>
+              {({ active }) => (
+                <button
+                  onClick={forceReconnectToPaseo}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-sm text-orange-600",
+                    active && "bg-orange-50 text-orange-700"
+                  )}
+                >
+                  <div className="h-4 w-4 rounded-full bg-orange-500"></div>
+                  Force Reconnect to Paseo
+                </button>
+              )}
+            </Menu.Item>
+          )}
+
+          {/* Manual network switching instructions */}
+          {!isPaseoNetwork && (
+            <Menu.Item>
+              {({ active }) => (
+                <div className={cn(
+                  "px-3 py-2 text-xs text-muted-foreground",
+                  active && "bg-accent text-accent-foreground"
+                )}>
+                  <div className="font-medium mb-1">Manual Switch:</div>
+                  <div>1. Open Talisman extension</div>
+                  <div>2. Click network dropdown</div>
+                  <div>3. Select "Paseo"</div>
+                  <div>4. Refresh this page</div>
+                </div>
               )}
             </Menu.Item>
           )}

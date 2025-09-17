@@ -22,11 +22,16 @@ interface UsePolkadotWalletReturn {
   isConnecting: boolean
   isConnected: boolean
   error: string | null
+  currentNetwork: string
+  isPaseoNetwork: boolean
   connectWallet: () => Promise<void>
   selectAccount: (account: InjectedAccountWithMeta) => void
   disconnect: () => void
   collectRewards: () => Promise<string>
   refreshBalance: () => Promise<void>
+  switchToPaseoNetwork: () => Promise<void>
+  checkNetwork: () => Promise<void>
+  forceReconnectToPaseo: () => Promise<void>
 }
 
 export function usePolkadotWallet(): UsePolkadotWalletReturn {
@@ -35,6 +40,8 @@ export function usePolkadotWallet(): UsePolkadotWalletReturn {
   const [balance, setBalance] = useState<string>("0 DOT")
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentNetwork, setCurrentNetwork] = useState<string>("unknown")
+  const [isPaseoNetwork, setIsPaseoNetwork] = useState<boolean>(false)
 
   const refreshBalance = useCallback(async () => {
     if (selectedAccount) {
@@ -148,6 +155,69 @@ export function usePolkadotWallet(): UsePolkadotWalletReturn {
     checkStoredAccounts()
   }, [refreshBalance])
 
+  const checkNetwork = useCallback(async () => {
+    try {
+      const api = await getPolkadotAPI()
+      if (!api) return
+
+      const network = await api.getCurrentNetwork()
+      const isPaseo = await api.checkPaseoNetwork()
+      
+      setCurrentNetwork(network)
+      setIsPaseoNetwork(isPaseo)
+      
+      console.log("Current network:", network, "Is Paseo:", isPaseo)
+      console.log("API endpoint:", api.getApiEndpoint?.() || "unknown")
+    } catch (error) {
+      console.error("Failed to check network:", error)
+    }
+  }, [])
+
+  const switchToPaseoNetwork = useCallback(async () => {
+    try {
+      setError(null)
+      const api = await getPolkadotAPI()
+      if (!api) {
+        throw new Error("Polkadot API not available")
+      }
+
+      await api.switchToPaseoNetwork()
+      
+      // Reconnect wallet to get new accounts
+      await connectWallet()
+      
+      // Check network again
+      await checkNetwork()
+      
+      console.log("Successfully switched to Paseo network")
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to switch to Paseo network"
+      setError(`${errorMessage}\n\nManual steps:\n1. Open Talisman extension\n2. Click network dropdown\n3. Select "Paseo"\n4. Refresh this page`)
+      console.error("Failed to switch to Paseo network:", error)
+    }
+  }, [connectWallet, checkNetwork])
+
+  const forceReconnectToPaseo = useCallback(async () => {
+    try {
+      setError(null)
+      const api = await getPolkadotAPI()
+      if (!api) {
+        throw new Error("Polkadot API not available")
+      }
+
+      await api.forceReconnectToPaseo()
+      
+      // Check network again
+      await checkNetwork()
+      
+      console.log("Successfully force reconnected to Paseo network")
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to force reconnect to Paseo network"
+      setError(errorMessage)
+      console.error("Failed to force reconnect to Paseo network:", error)
+    }
+  }, [checkNetwork])
+
   return {
     accounts,
     selectedAccount,
@@ -155,10 +225,15 @@ export function usePolkadotWallet(): UsePolkadotWalletReturn {
     isConnecting,
     isConnected: accounts.length > 0 && selectedAccount !== null,
     error,
+    currentNetwork,
+    isPaseoNetwork,
     connectWallet,
     selectAccount,
     disconnect,
     collectRewards,
     refreshBalance,
+    switchToPaseoNetwork,
+    checkNetwork,
+    forceReconnectToPaseo,
   }
 }
