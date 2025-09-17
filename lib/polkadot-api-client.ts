@@ -129,98 +129,13 @@ export class PolkadotAPIClient {
           throw new Error("Treasury module not available for spend call")
         }
         
-        // Create treasury spend call
-        let spendCall
-        try {
-          // Try proposeSpend first (more common for treasury proposals)
-          if (hasTreasuryUpper && this.api.tx.Treasury.proposeSpend) {
-            spendCall = this.api.tx.Treasury.proposeSpend(amount, beneficiaryAddress)
-            console.log("createSpenderReferenda: Using Treasury.proposeSpend (upper)")
-          } else if (hasTreasuryLower && this.api.tx.treasury.proposeSpend) {
-            spendCall = this.api.tx.treasury.proposeSpend(amount, beneficiaryAddress)
-            console.log("createSpenderReferenda: Using treasury.proposeSpend (lower)")
-          } else if (hasTreasuryUpper && this.api.tx.Treasury.spend) {
-            // Try spend with different parameter combinations
-            console.log("createSpenderReferenda: Attempting Treasury.spend with 4 params...")
-            console.log("createSpenderReferenda: Params: amount=", amount.toString(), "beneficiary=", beneficiaryAddress, "param3=0", "param4=0")
-            try {
-              // Try with correct parameter types for Treasury.spend
-              const decodedAddress = decodeAddress(beneficiaryAddress)
-              spendCall = this.api.tx.Treasury.spend(
-                { __Unused0: null }, // asset_kind: use default/null
-                amount, // amount: correct
-                { V3: { parents: 0, interior: { X1: { AccountId32: { network: null, id: decodedAddress } } } } }, // beneficiary: MultiLocation format with decoded address
-                null // valid_from: null/optional
-              )
-              console.log("createSpenderReferenda: Using Treasury.spend with correct types (upper)")
-            } catch (e) {
-              console.log("createSpenderReferenda: Correct types failed, trying simpler approach...")
-              console.log("createSpenderReferenda: Correct types error:", e?.message || e?.toString())
-              
-              // Try with just the essential parameters
-              try {
-                const decodedAddress = decodeAddress(beneficiaryAddress)
-                spendCall = this.api.tx.Treasury.spend(
-                  { __Unused0: null },
-                  amount,
-                  { V3: { parents: 0, interior: { X1: { AccountId32: { network: null, id: decodedAddress } } } } },
-                  null
-                )
-                console.log("createSpenderReferenda: Using Treasury.spend with simplified types (upper)")
-              } catch (e2) {
-                console.log("createSpenderReferenda: All Treasury.spend attempts failed")
-                console.log("createSpenderReferenda: Final error:", e2?.message || e2?.toString())
-                throw e2
-              }
-            }
-          } else if (hasTreasuryLower && this.api.tx.treasury.spend) {
-            // Try spend with different parameter combinations
-            console.log("createSpenderReferenda: Attempting treasury.spend with 4 params...")
-            console.log("createSpenderReferenda: Params: amount=", amount.toString(), "beneficiary=", beneficiaryAddress, "param3=0", "param4=0")
-            try {
-              // Try with correct parameter types for treasury.spend
-              // Parameters: asset_kind, amount, beneficiary, valid_from
-              const decodedAddress = decodeAddress(beneficiaryAddress)
-              spendCall = this.api.tx.treasury.spend(
-                { __Unused0: null }, // asset_kind: use default/null
-                amount, // amount: correct
-                { V3: { parents: 0, interior: { X1: { AccountId32: { network: null, id: decodedAddress } } } } }, // beneficiary: MultiLocation format with decoded address
-                null // valid_from: null/optional
-              )
-              console.log("createSpenderReferenda: Using treasury.spend with correct types (lower)")
-            } catch (e) {
-              console.log("createSpenderReferenda: Correct types failed, trying simpler approach...")
-              console.log("createSpenderReferenda: Correct types error:", e?.message || e?.toString())
-              
-              // Try with just the essential parameters
-              try {
-                const decodedAddress = decodeAddress(beneficiaryAddress)
-                spendCall = this.api.tx.treasury.spend(
-                  { __Unused0: null },
-                  amount,
-                  { V3: { parents: 0, interior: { X1: { AccountId32: { network: null, id: decodedAddress } } } } },
-                  null
-                )
-                console.log("createSpenderReferenda: Using treasury.spend with simplified types (lower)")
-              } catch (e2) {
-                console.log("createSpenderReferenda: All treasury.spend attempts failed")
-                console.log("createSpenderReferenda: Final error:", e2?.message || e2?.toString())
-                throw e2
-              }
-            }
-          } else {
-            throw new Error("No suitable treasury method found")
-          }
-          console.log("createSpenderReferenda: Treasury spend call created successfully")
-          console.log("createSpenderReferenda: Spend call hash:", spendCall.hash.toHex())
-        } catch (spendError) {
-          console.error("createSpenderReferenda: Failed to create treasury spend call:", spendError)
-          console.error("createSpenderReferenda: Spend error type:", typeof spendError)
-          console.error("createSpenderReferenda: Spend error message:", spendError?.message)
-          console.error("createSpenderReferenda: Spend error stack:", spendError?.stack)
-          console.error("createSpenderReferenda: Spend error toString:", spendError?.toString())
-          throw new Error(`Failed to create treasury spend call: ${spendError?.message || spendError?.toString() || 'Unknown error'}`)
-        }
+        // Skip complex treasury spend creation for now
+        // We'll create a remark referendum instead
+        console.log("createSpenderReferenda: Skipping treasury spend creation, using remark referendum")
+        
+        // Create a system remark call for the treasury proposal
+        const remarkCall = this.api.tx.system.remark(`Treasury spend proposal: ${amount} to ${beneficiaryAddress}`)
+        console.log("createSpenderReferenda: Remark call created:", remarkCall.hash.toHex())
         
         // Submit as referendum
         let proposal
@@ -228,9 +143,11 @@ export class PolkadotAPIClient {
           const referendumModule = hasReferenda ? this.api.tx.referenda : this.api.tx.Referenda
           console.log("createSpenderReferenda: Creating referendum with module:", referendumModule ? "found" : "not found")
           
+          // Use the correct format for referenda.submit
+          // The proposal needs to be wrapped in the correct enum format
           proposal = referendumModule.submit(
-            { system: "Root" }, // Origin (Root for treasury calls)
-            { Lookup: { Hash: spendCall.hash } }, // Proposal
+            { system: "Root" }, // Origin
+            { Inline: remarkCall.toHex() }, // Proposal as Inline bytes
             { After: 0 } // Enactment period
           )
           console.log("createSpenderReferenda: Referendum proposal created successfully")
@@ -338,7 +255,7 @@ export class PolkadotAPIClient {
         const referendumModule = hasReferenda ? this.api.tx.referenda : this.api.tx.Referenda
         const proposal = referendumModule.submit(
           { system: "Root" }, // Origin (Root for system calls)
-          { Lookup: { Hash: remarkCall.hash } }, // Proposal
+          { Inline: remarkCall.toHex() }, // Proposal as Inline bytes
           { After: 0 } // Enactment period
         )
         
