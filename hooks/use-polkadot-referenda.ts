@@ -32,12 +32,9 @@ export function usePolkadotReferenda() {
   const [error, setError] = useState<string | null>(null)
   const [initialized, setInitialized] = useState(false)
 
-  const initializeClient = useCallback(async () => {
-    if (initialized) {
-      console.log("Already initialized, skipping...")
-      return
-    }
+  console.log("usePolkadotReferenda: Hook rendered, initialized:", initialized)
 
+  const initializeClient = useCallback(async () => {
     console.log("Starting initialization in hook...")
     try {
       setLoading(true)
@@ -62,38 +59,51 @@ export function usePolkadotReferenda() {
   }, [])
 
   const fetchReferenda = useCallback(async () => {
-    if (!initialized) return
+    if (!initialized) {
+      console.log("fetchReferenda: Not initialized, skipping")
+      return
+    }
 
     try {
       setLoading(true)
       setError(null)
       
+      console.log("fetchReferenda: Starting fetch...")
       const client = await getPolkadotAPIClient()
       if (!client) {
         throw new Error("Polkadot API Client not available")
       }
       
+      console.log("fetchReferenda: Getting all referenda...")
       const allReferenda = await client.getReferenda()
+      console.log("fetchReferenda: All referenda:", allReferenda)
+      
+      console.log("fetchReferenda: Getting ongoing referenda...")
       const ongoing = await client.getOngoingReferenda()
+      console.log("fetchReferenda: Ongoing referenda:", ongoing)
       
       // Transform referenda to our format
-      const transformedReferenda: ReferendumDetails[] = allReferenda.map((ref: Referendum) => ({
-        id: ref.index,
-        title: `Referendum #${ref.index}`,
-        status: ref.type,
-        track: ref.track,
+      const transformedReferenda: ReferendumDetails[] = allReferenda.map((ref: any) => ({
+        id: parseInt(ref.id),
+        title: `Referendum #${ref.id}`,
+        status: ref.info?.status || "Unknown",
+        track: ref.info?.track || null,
       }))
 
-      const transformedOngoing: ReferendumDetails[] = ongoing.map((ref: OngoingReferendum) => ({
-        id: ref.index,
-        title: `Referendum #${ref.index}`,
-        status: "Ongoing",
-        track: ref.track,
+      const transformedOngoing: ReferendumDetails[] = ongoing.map((ref: any) => ({
+        id: parseInt(ref.id),
+        title: `Referendum #${ref.id}`,
+        status: ref.info?.status || "Ongoing",
+        track: ref.info?.track || null,
       }))
+
+      console.log("fetchReferenda: Transformed referenda:", transformedReferenda)
+      console.log("fetchReferenda: Transformed ongoing:", transformedOngoing)
 
       setReferenda(transformedReferenda)
       setOngoingReferenda(transformedOngoing)
     } catch (err) {
+      console.error("fetchReferenda: Error:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch referenda")
     } finally {
       setLoading(false)
@@ -171,13 +181,14 @@ export function usePolkadotReferenda() {
     }
   }, [initialized])
 
+  // Auto-fetch when initialized
   useEffect(() => {
-    initializeClient()
-  }, [initializeClient])
-
-  useEffect(() => {
+    console.log("usePolkadotReferenda: useEffect triggered, initialized:", initialized)
     if (initialized) {
+      console.log("usePolkadotReferenda: Initialized is true, calling fetchReferenda...")
       fetchReferenda()
+    } else {
+      console.log("usePolkadotReferenda: Initialized is false, skipping fetchReferenda")
     }
   }, [initialized, fetchReferenda])
 

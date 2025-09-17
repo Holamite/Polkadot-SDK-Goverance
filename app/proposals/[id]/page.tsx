@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import { Clock, Users, Calendar, CheckCircle, XCircle, AlertCircle, ArrowLeft, V
 import { useProposal } from "@/hooks/use-proposals"
 import { proposalStore } from "@/lib/proposal-store"
 import { userStore } from "@/lib/user-store"
+import { usePolkadotReferenda } from "@/hooks/use-polkadot-referenda"
 import Link from "next/link"
 
 export default function ProposalDetailPage() {
@@ -19,14 +20,48 @@ export default function ProposalDetailPage() {
   const router = useRouter()
   const proposalId = params.id as string
   const { proposal, loading } = useProposal(proposalId)
+  const { fetchReferendumDetails } = usePolkadotReferenda()
 
   const [selectedOption, setSelectedOption] = useState("")
   const [isVoting, setIsVoting] = useState(false)
   const [hasVoted, setHasVoted] = useState(false)
   const [userVote, setUserVote] = useState<string | null>(null)
+  const [referendumDetails, setReferendumDetails] = useState<any>(null)
+  const [referendumLoading, setReferendumLoading] = useState(false)
 
   // Simulate user ID (in real app, this would come from auth)
   const userId = "user-" + Math.random().toString(36).substr(2, 9)
+
+  // Fetch referendum details if proposal has a referendumId or if we can determine it from URL
+  useEffect(() => {
+    const fetchReferendum = async () => {
+      // Check if proposal has referendumId or if we can extract it from URL
+      const referendumId = proposal?.referendumId || 
+        (proposalId && proposalId.startsWith('referendum-') ? parseInt(proposalId.replace('referendum-', '')) : null)
+      
+      // For testing purposes, let's also check if we can get referendum info from URL params
+      const urlParams = new URLSearchParams(window.location.search)
+      const testReferendumId = urlParams.get('referendumId')
+      
+      const finalReferendumId = referendumId || (testReferendumId ? parseInt(testReferendumId) : null)
+      
+      if (finalReferendumId && !referendumDetails) {
+        setReferendumLoading(true)
+        try {
+          console.log("Fetching referendum details for ID:", finalReferendumId)
+          const details = await fetchReferendumDetails(finalReferendumId)
+          setReferendumDetails(details)
+          console.log("Referendum details:", details)
+        } catch (error) {
+          console.error("Failed to fetch referendum details:", error)
+        } finally {
+          setReferendumLoading(false)
+        }
+      }
+    }
+
+    fetchReferendum()
+  }, [proposal?.referendumId, proposalId, referendumDetails, fetchReferendumDetails])
 
   // Check if user has already voted and track proposal view
   useState(() => {
@@ -186,6 +221,101 @@ export default function ProposalDetailPage() {
                   <CardDescription className="text-base leading-relaxed">{proposal.description}</CardDescription>
                 </CardHeader>
               </Card>
+
+              {/* Referendum Status Section */}
+              {(proposal?.referendumId || referendumDetails) && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <BarChart3 className="h-5 w-5 text-primary" />
+                          On-Chain Referendum Status
+                        </CardTitle>
+                        <CardDescription>
+                          This proposal has been submitted to the Paseo blockchain as referendum #{proposal?.referendumId || referendumDetails?.id}
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const referendumId = proposal?.referendumId || referendumDetails?.id
+                          if (referendumId) {
+                            setReferendumLoading(true)
+                            try {
+                              const details = await fetchReferendumDetails(referendumId)
+                              setReferendumDetails(details)
+                            } catch (error) {
+                              console.error("Failed to refresh referendum details:", error)
+                            } finally {
+                              setReferendumLoading(false)
+                            }
+                          }
+                        }}
+                        disabled={referendumLoading}
+                      >
+                        {referendumLoading ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                        ) : (
+                          "Refresh"
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {referendumLoading ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                        Loading referendum details...
+                      </div>
+                    ) : referendumDetails ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">Referendum ID</Label>
+                            <p className="text-lg font-semibold">#{referendumDetails.id}</p>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                            <Badge variant="outline" className="mt-1">
+                              {referendumDetails.status || "Unknown"}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        {referendumDetails.details && (
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">On-Chain Title</Label>
+                            <p className="text-sm mt-1">{referendumDetails.details.title}</p>
+                          </div>
+                        )}
+
+                        {proposal.trackId && (
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">Track ID</Label>
+                            <p className="text-sm mt-1">{proposal.trackId}</p>
+                          </div>
+                        )}
+
+                        {proposal.onChainStatus && (
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">Chain Status</Label>
+                            <Badge variant="secondary" className="mt-1">
+                              {proposal.onChainStatus}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        <p>Referendum #{proposal?.referendumId || referendumDetails?.id} exists on-chain</p>
+                        <p className="text-sm mt-1">Unable to fetch detailed status at this time</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Voting Section */}
               <Card>

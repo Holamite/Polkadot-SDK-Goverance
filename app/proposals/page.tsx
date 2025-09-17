@@ -16,10 +16,62 @@ import { useEffect } from "react"
 
 export default function ProposalsPage() {
   const { proposals, loading } = useProposals()
-  const { referenda, ongoingReferenda, initialized, fetchReferenda } = usePolkadotReferenda()
+  const { referenda, ongoingReferenda, initialized, fetchReferenda, initializeClient } = usePolkadotReferenda()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
+  const [showBlockchainProposals, setShowBlockchainProposals] = useState(true)
+
+  // Manual initialization on page load
+  useEffect(() => {
+    console.log("Proposals page: useEffect triggered, initialized:", initialized)
+    if (!initialized) {
+      console.log("Proposals page: Not initialized, calling initializeClient...")
+      initializeClient()
+    }
+  }, [initialized, initializeClient])
+
+  // Convert blockchain referenda to proposal-like objects
+  const convertReferendaToProposals = (referendaList: any[]) => {
+    return referendaList.map((referendum) => ({
+      id: `referendum-${referendum.id}`,
+      title: referendum.details?.title || referendum.title || `Referendum #${referendum.id}`,
+      description: referendum.description || "Blockchain referendum",
+      proposalType: "Blockchain Referendum",
+      category: "Governance",
+      votingPeriod: 0, // Will be determined by blockchain
+      quorumThreshold: 0,
+      executionDelay: 0,
+      options: ["Approve", "Reject"],
+      rationale: "On-chain governance proposal",
+      implementation: "Executed on blockchain",
+      createdAt: new Date(), // Approximate
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      status: referendum.status === "Ongoing" ? "active" : "ended",
+      votes: {},
+      totalVotes: 0,
+      referendumId: referendum.id,
+      trackId: referendum.track?.id,
+      onChainStatus: referendum.status,
+      beneficiaryAddress: undefined,
+      amount: undefined,
+      callData: undefined,
+    }))
+  }
+
+  // Combine local proposals with blockchain referenda
+  const allProposals = [
+    ...proposals,
+    ...(showBlockchainProposals ? convertReferendaToProposals(ongoingReferenda) : [])
+  ]
+
+  // Debug logging
+  console.log("Proposals page debug:")
+  console.log("- Local proposals:", proposals.length)
+  console.log("- Ongoing referenda:", ongoingReferenda.length)
+  console.log("- Show blockchain:", showBlockchainProposals)
+  console.log("- All proposals:", allProposals.length)
+  console.log("- Initialized:", initialized)
 
   // Sync local proposals with on-chain referenda status
   useEffect(() => {
@@ -33,7 +85,7 @@ export default function ProposalsPage() {
     }
   }, [initialized, referenda])
 
-  const filteredProposals = proposals.filter((proposal) => {
+  const filteredProposals = allProposals.filter((proposal) => {
     const matchesSearch =
       proposal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       proposal.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -104,17 +156,23 @@ export default function ProposalsPage() {
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-4 mb-4">
               <h1 className="text-4xl font-bold text-foreground">Governance Proposals</h1>
-              {initialized && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={fetchReferenda}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Sync Chain
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!initialized) {
+                    console.log("Manual initialization triggered from button")
+                    await initializeClient()
+                  } else {
+                    console.log("Manual fetch triggered from button")
+                    await fetchReferenda()
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                {initialized ? "Sync Chain" : "Initialize & Sync"}
+              </Button>
             </div>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Review and vote on active proposals that shape our DAO's future
@@ -162,8 +220,39 @@ export default function ProposalsPage() {
                   <SelectItem value="Grant Proposal">Grants</SelectItem>
                   <SelectItem value="Partnership Agreement">Partnerships</SelectItem>
                   <SelectItem value="Governance Change">Governance</SelectItem>
+                  <SelectItem value="Blockchain Referendum">Blockchain Referendum</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            
+            {/* Blockchain Toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="showBlockchain"
+                  checked={showBlockchainProposals}
+                  onChange={(e) => setShowBlockchainProposals(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <label htmlFor="showBlockchain" className="text-sm font-medium">
+                  Show blockchain referenda ({ongoingReferenda.length})
+                </label>
+              </div>
+              {!initialized && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Initialize connection
+                    console.log("Initialize blockchain connection")
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Connect to Blockchain
+                </Button>
+              )}
             </div>
           </div>
 
