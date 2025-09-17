@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, Gavel, Clock, Vote, Link, Coins } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useRouter } from "next/navigation"
-// Removed local storage imports - only using chain submission
+// Import proposal store for local storage after successful blockchain submission
+import { proposalStore } from "@/lib/proposal-store"
 import { usePolkadotReferenda } from "@/hooks/use-polkadot-referenda"
 
 // Dynamic import to avoid SSR issues
@@ -127,8 +128,30 @@ export default function CreateProposalPage() {
 
       console.log("Chain transaction successful:", referendumInfo)
       
+      // Add proposal to local storage only after successful blockchain submission
+      const proposalId = proposalStore.createProposal({
+        title,
+        description,
+        proposalType,
+        category: proposalType, // Use proposalType as category
+        votingPeriod: parseInt(votingPeriod) || 7, // Use form value or default 7 days
+        quorumThreshold: parseInt(quorumThreshold) || 50, // Use form value or default 50%
+        executionDelay: parseInt(executionDelay) || 1, // Use form value or default 1 day
+        options: options.map(opt => opt.text), // Use form options
+        rationale: description, // Use description as rationale
+        implementation: "Implementation details will be provided after approval", // Default implementation
+        referendumId: parseInt(referendumInfo.index),
+        trackId: referendumInfo.track === "Treasury" ? 11 : 0, // Default track IDs
+        onChainStatus: "Submitted",
+        beneficiaryAddress: proposalType === "Treasury Management" ? beneficiaryAddress : undefined,
+        amount: proposalType === "Treasury Management" ? Number.parseFloat(amount || "0") * 1e10 : undefined,
+        callData: referendumInfo.hash
+      })
+      
+      console.log("Proposal added to local storage with ID:", proposalId)
+      
       // Show success message with referendum details
-            alert(`✅ Proposal successfully submitted to Paseo chain!\n\nReferendum ID: ${referendumInfo.index}\nTrack: ${referendumInfo.track}\n\nYour proposal is now live on the blockchain!`)
+      alert(`✅ Proposal successfully submitted to Paseo chain!\n\nReferendum ID: ${referendumInfo.index}\nTrack: ${referendumInfo.track}\nLocal Proposal ID: ${proposalId}\n\nYour proposal is now live on the blockchain and saved locally!`)
       
       router.push("/proposals")
     } catch (error) {

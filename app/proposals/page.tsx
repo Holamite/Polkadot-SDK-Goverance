@@ -22,6 +22,9 @@ export default function ProposalsPage() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [showBlockchainProposals, setShowBlockchainProposals] = useState(true)
 
+    const truncate = (str: string, n: number) =>
+  str?.length > n ? str.slice(0, n) + "..." : str;
+
   // Manual initialization on page load
   useEffect(() => {
     console.log("Proposals page: useEffect triggered, initialized:", initialized)
@@ -35,7 +38,7 @@ export default function ProposalsPage() {
   const convertReferendaToProposals = (referendaList: any[]) => {
     return referendaList.map((referendum) => ({
       id: `referendum-${referendum.id}`,
-      title: referendum.details?.title || referendum.title || `Referendum #${referendum.id}`,
+      title: referendum.details?.title || referendum.title || `Referendum #${Math.floor(referendum.id)}`,
       description: referendum.description || "Blockchain referendum",
       proposalType: "Blockchain Referendum",
       category: "Governance",
@@ -290,7 +293,7 @@ export default function ProposalsPage() {
                           {proposal.referendumId && (
                             <Badge variant="secondary" className="text-xs flex items-center gap-1">
                               <LinkIcon className="h-3 w-3" />
-                              Referendum #{proposal.referendumId}
+                              Referendum #{Math.floor(proposal.referendumId).toString().slice(0, 7)}
                             </Badge>
                           )}
                         </div>
@@ -298,8 +301,8 @@ export default function ProposalsPage() {
                           {proposal.proposalType}
                         </Badge>
                       </div>
-                      <CardTitle className="text-lg leading-tight">{proposal.title}</CardTitle>
-                      <CardDescription className="line-clamp-2">{proposal.description}</CardDescription>
+                      <CardTitle className="text-lg leading-tight line-clamp-2">{truncate(proposal.title, 50)}</CardTitle>
+                      <CardDescription className="line-clamp-3 text-sm">{truncate(proposal.description, 120)}</CardDescription>
                       {proposal.onChainStatus && (
                         <div className="text-xs text-muted-foreground mt-2">
                           <span className="font-medium">Chain Status:</span> {proposal.onChainStatus}

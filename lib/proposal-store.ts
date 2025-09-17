@@ -20,7 +20,7 @@ export interface Proposal {
   trackId?: number
   onChainStatus?: string
   beneficiaryAddress?: string
-  amount?: bigint
+  amount?: number
   callData?: string
 }
 
@@ -173,7 +173,7 @@ class ProposalStore {
     trackId?: number
     onChainStatus?: string
     beneficiaryAddress?: string
-    amount?: bigint
+    amount?: number
     callData?: string
   }): boolean {
     const proposal = this.getProposal(proposalId)
